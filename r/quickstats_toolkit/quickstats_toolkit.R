@@ -1,4 +1,133 @@
-############################################
+# QuickStats Toolkit
+# Festus Slade (2020 archive) — reusable EDA + descriptive stats + basic inference helpers
+
+# ---------- Helpers ----------
+mode_numeric <- function(x) {
+  x <- x[!is.na(x)]
+  if (length(x) == 0) return(NA_real_)
+  t0 <- table(x)
+  as.numeric(names(t0)[t0 == max(t0)])[1]
+}
+
+mode_factor <- function(x) {
+  x <- x[!is.na(x)]
+  if (length(x) == 0) return(NA)
+  t0 <- table(x)
+  as.factor(names(t0)[t0 == max(t0)])[1]
+}
+
+boot_ci_mean <- function(x, B = 10000, conf = 0.95) {
+  x <- x[!is.na(x)]
+  if (length(x) < 2) return(c(lower = NA, upper = NA))
+  a <- replicate(B, mean(sample(x, replace = TRUE)))
+  alpha <- (1 - conf) / 2
+  unname(quantile(a, c(alpha, 1 - alpha)))
+}
+
+describe_numeric <- function(x) {
+  x0 <- x[!is.na(x)]
+  n <- length(x0)
+  if (n == 0) {
+    return(data.frame(n=0, missing=length(x), mean=NA, sd=NA, median=NA, iqr=NA, min=NA, max=NA))
+  }
+  data.frame(
+    n = n,
+    missing = sum(is.na(x)),
+    mean = mean(x0),
+    sd = sd(x0),
+    median = median(x0),
+    iqr = IQR(x0),
+    min = min(x0),
+    max = max(x0)
+  )
+}
+
+describe_factor <- function(x) {
+  data.frame(
+    n = sum(!is.na(x)),
+    missing = sum(is.na(x)),
+    levels = length(unique(x[!is.na(x)])),
+    top = as.character(mode_factor(x))
+  )
+}
+
+# ---------- Main ----------
+quickstats <- function(df, group_var = NULL, out_dir = NULL, boot_B = 10000) {
+  stopifnot(is.data.frame(df))
+
+  # classify variables
+  is_num <- sapply(df, is.numeric)
+  is_fac <- sapply(df, function(z) is.factor(z) || is.character(z) || is.logical(z))
+
+  # coerce obvious categorical small-integer fields? (optional)
+  # df$sex <- as.factor(df$sex)
+
+  num_vars <- names(df)[is_num]
+  fac_vars <- names(df)[is_fac]
+
+  # summaries
+  num_summary <- do.call(rbind, lapply(num_vars, function(v) cbind(var=v, describe_numeric(df[[v]]))))
+  fac_summary <- do.call(rbind, lapply(fac_vars, function(v) cbind(var=v, describe_factor(df[[v]]))))
+
+  # bootstrap CI for numeric means
+  if (length(num_vars) > 0) {
+    ci <- lapply(num_vars, function(v) boot_ci_mean(df[[v]], B = boot_B))
+    ci_df <- data.frame(var = num_vars,
+                        ci_lower = sapply(ci, `[`, 1),
+                        ci_upper = sapply(ci, `[`, 2))
+    num_summary <- merge(num_summary, ci_df, by = "var", all.x = TRUE)
+  }
+
+  # group comparisons (optional)
+  group_results <- NULL
+  if (!is.null(group_var) && group_var %in% names(df)) {
+    g <- as.factor(df[[group_var]])
+    # For each numeric var, do Shapiro per group + t-test/Wilcoxon suggestion
+    group_results <- do.call(rbind, lapply(num_vars, function(v) {
+      x <- df[[v]]
+      ok <- !is.na(x) & !is.na(g)
+      if (length(unique(g[ok])) != 2) return(NULL)
+      lev <- levels(droplevels(g[ok]))
+      x1 <- x[ok & g == lev[1]]
+      x2 <- x[ok & g == lev[2]]
+      # fallback tests
+      p1 <- if (length(x1) >= 3) shapiro.test(x1)$p.value else NA
+      p2 <- if (length(x2) >= 3) shapiro.test(x2)$p.value else NA
+      tt <- tryCatch(t.test(x ~ g, data = df), error = function(e) NULL)
+      wt <- tryCatch(wilcox.test(x ~ g, data = df), error = function(e) NULL)
+
+      data.frame(
+        var = v,
+        group = group_var,
+        g1 = lev[1],
+        g2 = lev[2],
+        shapiro_p_g1 = p1,
+        shapiro_p_g2 = p2,
+        ttest_p = if (!is.null(tt)) tt$p.value else NA,
+        wilcox_p = if (!is.null(wt)) wt$p.value else NA
+      )
+    }))
+  }
+
+  # output
+  if (!is.null(out_dir)) {
+    dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
+    write.csv(num_summary, file.path(out_dir, "numeric_summary.csv"), row.names = FALSE)
+    write.csv(fac_summary, file.path(out_dir, "categorical_summary.csv"), row.names = FALSE)
+    if (!is.null(group_results)) write.csv(group_results, file.path(out_dir, "group_tests.csv"), row.names = FALSE)
+  }
+
+  list(
+    numeric_summary = num_summary,
+    categorical_summary = fac_summary,
+    group_tests = group_results
+  )
+}
+
+# ---------- Example usage ----------
+# df <- read.csv(file.choose())
+# res <- quickstats(df, group_var = "sex", out_dir = "outputs", boot_B = 20000)
+# print(res$numeric_summary)############################################
 ### R scripts - Assessment 3 and beyond! ###
 ############################################
 
