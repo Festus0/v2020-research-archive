@@ -1,4 +1,4 @@
-# QuickStats Toolkit (R)
+C# QuickStats Toolkit (R)
 
 ## Overview
 QuickStats Toolkit is a lightweight, reusable R script for rapid exploratory data analysis (EDA), descriptive statistics, basic statistical testing, and visualization on tabular datasets (CSV or data frames).
@@ -58,6 +58,50 @@ The toolkit performs end-to-end exploratory and statistical analysis including:
 
 ## Example Usage
 
+cat > r/quickstats_toolkit/README.md << 'EOF'
+## Example Usage
+
 ### 1. Load the Dataset
 ```r
 df <- read.csv(file.choose())
+cat > r/quickstats_toolkit/README.md << 'EOF'
+
+2. Convert a Variable to Factor (Categorical)
+```r 
+df$group <- as.factor(df$group)
+
+3. Create a Subset
+```r 
+subset_df <- subset(df, group == "A")
+
+4. Run Descriptive Statistics
+```r 
+mean(df$value, na.rm = TRUE)
+median(df$value, na.rm = TRUE)
+sd(df$value, na.rm = TRUE)
+
+5. Perform Statistical Tests
+```r 
+# Parametric test (t-test)
+t.test(df$outcome ~ df$group, var.equal = TRUE)
+
+# Non-parametric test (Wilcoxon / Mann-Whitney)
+wilcox.test(df$outcome ~ df$group)
+
+# Correlation analysis
+cor.test(df$x, df$y)
+
+6. Generate Plots
+```r 
+# Boxplot for group comparison
+boxplot(df$outcome ~ df$group,
+        col = c("violet", "lightgreen"),
+        xlab = "Group",
+        ylab = "Outcome")
+
+# Histogram for distribution inspection
+hist(df$value)
+
+# Normality diagnostics
+qqnorm(df$value)
+qqline(df$value)
