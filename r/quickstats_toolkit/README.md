@@ -58,7 +58,6 @@ The toolkit performs end-to-end exploratory and statistical analysis including:
 
 ## Example Usage
 
-cat > r/quickstats_toolkit/README.md << 'EOF'
 ## Example Usage
 
 ### 1. Load the Dataset
